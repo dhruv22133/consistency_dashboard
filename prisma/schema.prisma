@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// 1. AUTH.JS MODELS (AUTHENTICATION & USER PROFILE)
+// ==========================================
+
+model User {
+  id                          String          @id @default(uuid())
+  name                        String?
+  email                       String          @unique
+  emailVerified               DateTime?
+  image                       String?
+  password                    String?         // Hashed password for credentials login
+  
+  // Custom Profile & Dashboard Preferences
+  motto                       String?         @default("Consistency is the DNA of mastery.")
+  dailyReminderHours          Int             @default(5)
+  monthlyIntervalDays         Int             @default(10)
+  yearlyIntervalMonths        Int             @default(3)
+  browserNotificationsEnabled Boolean         @default(false)
+  timezone                    String?         @default("UTC")
+  lastDailyPushAt             DateTime?
+
+  // Auth.js Relations
+  accounts                    Account[]
+  sessions                    Session[]
+  
+  // Relations to Consistency Data
+  tasks                       Task[]
+  dayLogs                     DayLog[]
+  notifications               Notification[]
+  pushSubscriptions           PushSubscription[]
+
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+}
+
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ==========================================
+// 2. CONSISTENCY DASHBOARD APP MODELS
+// ==========================================
+
+model Task {
+  id          String    @id @default(uuid())
+  title       String
+  timeframe   String    // "daily", "monthly", "yearly"
+  completed   Boolean   @default(false)
+  streak      Int       @default(0)
+  targetDate  String?
+  completedAt DateTime?
+  
+  // Connects every task to a specific User
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model DayLog {
+  id                  String   @id @default(uuid())
+  date                String   // "YYYY-MM-DD"
+  totalDailyTasks     Int      @default(0)
+  completedDailyTasks Int      @default(0)
+  completionRate      Int      @default(0)
+  
+  // List of task titles completed or missed for this specific date
+  completedTaskTitles String[] @default([])
+  missedTaskTitles    String[] @default([])
+
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A user can only have ONE log per date
+  @@unique([userId, date])
+}
+
+model Notification {
+  id             String   @id @default(uuid())
+  title          String
+  message        String
+  timeframe      String   // "daily", "monthly", "yearly", or "system"
+  remainingCount Int
+  read           Boolean  @default(false)
+  intervalHours  Int?
+
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
